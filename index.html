@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="ATELIER DE L'ÉCOUTE — Écouter • Soutenir • Orienter">
+<title>ATELIER DE L'ÉCOUTE — Espace bénéficiaire</title>
+<script src="https://sdk.minepi.com/pi-sdk.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7f9;color:#17324d}header{height:68px;background:#12344d;color:#fff;padding:0 5%;display:flex;align-items:center;justify-content:space-between}.logo{font-weight:800}.logo small{display:block;color:#b9dce2;font-size:11px;margin-top:3px}button{border:0;border-radius:9px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:#087f8c;color:#fff}.dark{background:#12344d;color:#fff}.light{background:#fff;color:#12344d}.danger{background:#8b2635;color:#fff}.layout{display:grid;grid-template-columns:245px 1fr;min-height:calc(100vh - 68px)}aside{background:#102d42;color:#fff;padding:18px 12px}.nav button{width:100%;background:transparent;color:#e7f0f4;text-align:left;margin:3px 0}.nav button:hover,.nav .active{background:#1d4c65}main{padding:28px;max-width:1250px;width:100%;margin:auto}.top{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:20px}h1{margin:0 0 5px}.muted{color:#718096;font-size:14px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card,.panel{background:#fff;border:1px solid #e1e8ee;border-radius:15px;padding:20px;margin-bottom:16px}.stat strong{display:block;font-size:30px;color:#087f8c;margin-top:8px}.badge{display:inline-block;padding:5px 9px;border-radius:20px;font-size:11px;font-weight:700}.new{background:#fff0c7;color:#7a5a00}.progress{background:#dff3f5;color:#076873}.done{background:#d9f4e8;color:#146c43}.item{padding:16px 0;border-bottom:1px solid #edf1f4}.actions{display:flex;gap:8px;flex-wrap:wrap}textarea,input,select{width:100%;padding:12px;border:1px solid #cbd6de;border-radius:9px;font:inherit;margin:7px 0 14px}textarea{min-height:140px}.detail{display:grid;grid-template-columns:1fr 300px;gap:18px}.reply{background:#f8fafb;border-radius:10px;padding:12px;margin:10px 0}.notice{background:#eef8fa;border-left:4px solid #087f8c;padding:14px;border-radius:5px;line-height:1.55}.login{max-width:460px;margin:70px auto;background:#fff;padding:32px;border-radius:16px;border:1px solid #e1e8ee;box-shadow:0 10px 30px rgba(18,52,77,.08)}.login h1{font-size:27px}.pi-btn{width:100%;font-size:16px;background:#087f8c;color:#fff}.status{margin-top:14px;padding:12px;border-radius:9px;background:#f1f5f8;font-size:14px}.error{background:#fff0f0;color:#8b2635;border-left:4px solid #8b2635}.success{background:#eefaf4;color:#146c43;border-left:4px solid #2e8b57}.hidden{display:none!important}.empty{padding:30px;text-align:center;color:#718096}.security{font-size:12px;color:#64748b;line-height:1.5;margin-top:18px}.loading{opacity:.7;pointer-events:none}@media(max-width:850px){.layout{grid-template-columns:1fr}.detail{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}}@media(max-width:560px){main{padding:16px}.grid{grid-template-columns:1fr}.top{flex-direction:column;align-items:flex-start}header{padding:0 14px}.logo{font-size:13px}}
+</style>
+</head>
+<body>
+<header>
+<div class="logo">ATELIER DE L'ÉCOUTE<small>Écouter • Soutenir • Orienter</small></div>
+<div id="headerAccount" class="hidden"><span id="who"></span> <button class="light" onclick="logout()">Déconnexion</button></div>
+</header>
+
+<section id="loginScreen" class="login">
+<h1>Bienvenue</h1>
+<p class="muted">Connectez-vous avec votre compte Pi Network pour accéder à votre espace bénéficiaire.</p>
+<button id="piLogin" class="pi-btn" onclick="signInWithPi()">π Se connecter avec Pi Network</button>
+<div id="authStatus" class="status">Initialisation de Pi Network…</div>
+<p class="security"><b>Confidentialité :</b> l’identité affichée par l’application provient uniquement de la validation effectuée par App Studio après authentification Pi. Les identifiants fournis directement par le navigateur ne sont pas utilisés comme preuve d’identité.</p>
+</section>
+
+<div id="app" class="layout hidden">
+<aside><h4>ESPACE BÉNÉFICIAIRE</h4><div class="nav">
+<button class="active" onclick="dashboard(this)">📊 Tableau de bord</button>
+<button onclick="newRequest(this)">🆘 Nouvelle demande</button>
+<button onclick="myRequests(this)">📋 Mes demandes</button>
+<button onclick="myCases(this)">📂 Mes dossiers</button>
+<button onclick="myOrientations(this)">🧭 Mes orientations</button>
+<button onclick="notifications(this)">🔔 Notifications <span id="notifCount"></span></button>
+<button onclick="profile(this)">👤 Mon profil</button>
+</div></aside>
+<main id="main"></main>
+</div>
+
+<script>
+const APPSTUDIO_LOGIN_URL="https://backend.appstudio-u7cm9zhmha0ruwv8.piappengine.com/pi/auth/v1/login";
+const SESSION_KEY="atelier_ecoute_pi_session";
+const DATA_KEY="atelier_ecoute_v44";
+let piReady=false;
+let authBusy=false;
+let session=null;
+let db=null;
+
+function setAuthStatus(message,type=""){
+ const el=document.getElementById("authStatus");
+ el.textContent=message;el.className="status "+type;
+}
+function escapeHtml(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c]));}
+function getStoredSession(){try{const raw=sessionStorage.getItem(SESSION_KEY);return raw?JSON.parse(raw):null}catch{return null}}
+function saveSession(s){sessionStorage.setItem(SESSION_KEY,JSON.stringify(s))}
+function clearSession(){sessionStorage.removeItem(SESSION_KEY);session=null}
+
+async function initPi(){
+ try{
+  if(!window.Pi) throw new Error("Le SDK Pi Network n'est pas disponible. Ouvrez l'application dans Pi Browser.");
+  await window.Pi.init({version:"2.0"});
+  piReady=true;
+  setAuthStatus("Pi Network est prêt. Vous pouvez vous connecter.","success");
+  const stored=getStoredSession();
+  if(stored && stored.sessionToken && stored.user && stored.user.uid){
+    session=stored;
+    await enterApp();
+  }
+ }catch(err){
+  console.error(err);
+  setAuthStatus(err.message||"Impossible d'initialiser Pi Network.","error");
+ }
+}
+
+async function signInWithPi(){
+ if(authBusy)return;
+ authBusy=true;
+ const button=document.getElementById("piLogin");button.classList.add("loading");button.disabled=true;
+ try{
+  if(!piReady){await window.Pi.init({version:"2.0"});piReady=true}
+  setAuthStatus("Ouverture de la demande d'autorisation Pi…");
+  const authResult=await window.Pi.authenticate(["username"],onIncompletePaymentFound);
+  const accessToken=authResult&&authResult.accessToken;
+  if(!accessToken)throw new Error("Pi n'a pas fourni de jeton d'accès.");
+  setAuthStatus("Authentification Pi réussie. Validation sécurisée auprès d'App Studio…");
+
+  const response=await fetch(APPSTUDIO_LOGIN_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accessToken})});
+  let data=null;try{data=await response.json()}catch{}
+  if(!response.ok)throw new Error((data&&data.message)||`La validation App Studio a échoué (${response.status}).`);
+  if(!data||!data.sessionToken||!data.user||!data.user.uid||!data.user.username)throw new Error("Réponse App Studio invalide : session ou identité absente.");
+
+  // L’identité de confiance vient exclusivement de la réponse App Studio.
+  session={sessionToken:data.sessionToken,user:{uid:String(data.user.uid),username:String(data.user.username)}};
+  saveSession(session);
+  setAuthStatus("Connexion réussie.","success");
+  await enterApp();
+ }catch(err){
+  console.error("Pi authentication error",err);
+  setAuthStatus(err.message||"Connexion impossible. Réessayez dans Pi Browser.","error");
+ }finally{
+  authBusy=false;button.classList.remove("loading");button.disabled=false;
+ }
+}
+
+function onIncompletePaymentFound(payment){
+ console.warn("Paiement Pi incomplet détecté",payment);
+ // L'application ne traite pas les paiements pour le moment. On conserve le callback obligatoire.
+}
+
+async function enterApp(){
+ if(!session||!session.user||!session.user.uid)return;
+ document.getElementById("loginScreen").classList.add("hidden");
+ document.getElementById("app").classList.remove("hidden");
+ document.getElementById("headerAccount").classList.remove("hidden");
+ document.getElementById("who").textContent="@"+session.user.username;
+ loadDbForUser();
+ dashboard();
+}
+
+function loadDbForUser(){
+ let raw=null;try{raw=JSON.parse(localStorage.getItem(DATA_KEY)||"null")}catch{}
+ if(!raw)raw={users:[],requests:[],cases:[],orientations:[],notifications:[]};
+ db=raw;
+ // Local demo data is scoped to the trusted App Studio uid, never to a browser-supplied uid/username.
+ let user=db.users.find(u=>u.uid===session.user.uid);
+ if(!user){
+  user={uid:session.user.uid,username:session.user.username,name:session.user.username,email:"",phone:""};
+  db.users.push(user);save();
+ }
+}
+function save(){localStorage.setItem(DATA_KEY,JSON.stringify(db))}
+function currentUser(){return db.users.find(u=>u.uid===session.user.uid)}
+function mineRequests(){return db.requests.filter(r=>r.uid===session.user.uid)}
+function mineCases(){return db.cases.filter(c=>c.uid===session.user.uid)}
+function mineOrientations(){return db.orientations.filter(o=>o.uid===session.user.uid)}
+function mineNotifications(){return db.notifications.filter(n=>n.uid===session.user.uid)}
+function setActive(el){document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));if(el)el.classList.add('active')}
+function badge(s){return '<span class="badge '+(s==="Nouvelle"?'new':s==="En cours"?'progress':'done')+'">'+escapeHtml(s)+'</span>'}
+
+function dashboard(el){
+ setActive(el);const u=currentUser(),mine=mineRequests(),unread=mineNotifications().filter(n=>!n.read).length;
+ document.getElementById("main").innerHTML=`<div class="top"><div><h1>Bonjour, ${escapeHtml(u.name||u.username)}</h1><p class="muted">Bienvenue dans votre espace d'accompagnement.</p></div><button class="primary" onclick="newRequest()">🆘 Demander de l'aide</button></div>
+ <div class="grid"><div class="card stat"><span class="muted">Mes demandes</span><strong>${mine.length}</strong></div><div class="card stat"><span class="muted">En cours</span><strong>${mine.filter(r=>r.status==="En cours").length}</strong></div><div class="card stat"><span class="muted">Répondues</span><strong>${mine.filter(r=>r.status==="Répondue").length}</strong></div><div class="card stat"><span class="muted">Notifications</span><strong>${unread}</strong></div></div>
+ <div class="panel"><h2>🔔 Dernières informations</h2>${unread?mineNotifications().filter(n=>!n.read).slice(-3).reverse().map(n=>`<div class="notice">${escapeHtml(n.text)}<br><small>${escapeHtml(n.date)}</small></div>`).join(""):'<p class="muted">Vous êtes à jour.</p>'}</div>
+ <div class="panel"><h2>📋 Mes demandes récentes</h2>${mine.length?mine.slice().reverse().slice(0,3).map(requestCard).join(""):'<div class="empty">Aucune demande.</div>'}</div>`;
+}
+function requestCard(r){return `<div class="item"><b>${escapeHtml(r.id)}</b> — ${escapeHtml(r.type)} ${badge(r.status)}<p class="muted">${escapeHtml(r.description.substring(0,115))}${r.description.length>115?'...':''}</p><button class="dark" onclick="detail('${encodeURIComponent(r.id)}')">👁️ Voir ma demande</button></div>`}
+function newRequest(el){
+ setActive(el);document.getElementById("main").innerHTML=`<div class="top"><div><h1>🆘 Nouvelle demande</h1><p class="muted">Décrivez votre situation afin qu'un professionnel puisse vous répondre.</p></div></div>
+ <div class="panel"><label>Motif de la demande</label><select id="type"><option>Difficulté familiale</option><option>Accompagnement éducatif</option><option>Difficulté financière</option><option>Conflit ou médiation</option><option>Autre situation sociale</option></select>
+ <label>Décrivez votre situation</label><textarea id="desc" placeholder="Expliquez votre situation, vos besoins et ce que vous attendez de l'accompagnement…"></textarea>
+ <button class="primary" onclick="sendRequest()">📨 Envoyer la demande</button></div>`;
+}
+function sendRequest(){
+ const type=document.getElementById("type").value,desc=document.getElementById("desc").value.trim();
+ if(desc.length<10){alert("Décrivez votre situation avec un peu plus de détails.");return}
+ const u=currentUser();const id="DEM-"+new Date().getFullYear()+"-"+String(db.requests.length+1).padStart(3,"0");
+ db.requests.push({id,uid:session.user.uid,username:session.user.username,name:u.name,email:u.email,phone:u.phone,type,date:new Date().toLocaleDateString("fr-FR"),status:"Nouvelle",description:desc,replies:[],caseId:null,orientationId:null});
+ db.notifications.push({id:Date.now(),uid:session.user.uid,requestId:id,text:"Votre demande "+id+" a été envoyée. Elle est en attente d'examen.",date:new Date().toLocaleString("fr-FR"),read:false});
+ save();alert("Demande envoyée : "+id);myRequests();
+}
+function myRequests(el){
+ setActive(el);const list=mineRequests();
+ document.getElementById("main").innerHTML=`<div class="top"><div><h1>📋 Mes demandes</h1><p class="muted">Suivez l'évolution de vos demandes et consultez les réponses.</p></div><button class="primary" onclick="newRequest()">+ Nouvelle demande</button></div>
+ <div class="panel">${list.length?list.slice().reverse().map(requestCard).join(""):'<div class="empty">Vous n\'avez envoyé aucune demande.</div>'}</div>`;
+}
+function detail(encodedId){
+ const id=decodeURIComponent(encodedId),r=mineRequests().find(x=>x.id===id);if(!r)return;
+ document.getElementById("main").innerHTML=`<div class="top"><div><button class="light" onclick="myRequests()">← Retour</button><h1 style="margin-top:15px">Détails de ma demande</h1><p class="muted">${escapeHtml(r.id)} · ${escapeHtml(r.date)} · ${badge(r.status)}</p></div></div>
+ <div class="detail"><div><div class="panel"><h2>📝 Ma situation</h2><div class="notice">${escapeHtml(r.description)}</div></div><div class="panel"><h2>💬 Réponses du professionnel</h2>${r.replies&&r.replies.length?r.replies.map(x=>`<div class="reply"><b>${escapeHtml(x.author)}</b> <span class="muted">— ${escapeHtml(x.date)}</span><p>${escapeHtml(x.text)}</p></div>`).join(""):'<p class="muted">Votre demande n\'a pas encore reçu de réponse.</p>'}</div></div><div><div class="panel"><h2>📌 Suivi</h2><p><b>Statut</b><br>${badge(r.status)}</p><p><b>Motif</b><br>${escapeHtml(r.type)}</p><p><b>N° de dossier</b><br>${escapeHtml(r.caseId||"Pas encore créé")}</p><p><b>Orientation</b><br>${escapeHtml(r.orientationId||"Aucune pour le moment")}</p></div></div></div>`;
+}
+function myCases(el){setActive(el);const list=mineCases();document.getElementById("main").innerHTML=`<div class="top"><h1>📂 Mes dossiers</h1></div><div class="panel">${list.length?list.map(c=>`<div class="item"><b>${escapeHtml(c.id)}</b><br>${escapeHtml(c.type)}<br><span class="muted">Créé le ${escapeHtml(c.date)} · ${badge(c.status)}</span></div>`).join(""):'<div class="empty">Aucun dossier social n\'est encore disponible.</div>'}</div>`}
+function myOrientations(el){setActive(el);const list=mineOrientations();document.getElementById("main").innerHTML=`<div class="top"><h1>🧭 Mes orientations</h1></div><div class="panel">${list.length?list.map(o=>`<div class="item"><b>${escapeHtml(o.structure)}</b><p>${escapeHtml(o.note||"")}</p><span class="muted">${escapeHtml(o.date)} · ${escapeHtml(o.id)}</span></div>`).join(""):'<div class="empty">Aucune orientation pour le moment.</div>'}</div>`}
+function notifications(el){setActive(el);mineNotifications().forEach(n=>n.read=true);save();document.getElementById("main").innerHTML=`<div class="top"><h1>🔔 Notifications</h1></div><div class="panel">${mineNotifications().length?mineNotifications().slice().reverse().map(n=>`<div class="item"><b>${escapeHtml(n.text)}</b><br><span class="muted">${escapeHtml(n.date)}</span><br><button class="dark" onclick="detail('${encodeURIComponent(n.requestId)}')">Voir la demande</button></div>`).join(""):'<div class="empty">Aucune notification.</div>'}</div>`}
+function profile(el){const u=currentUser();setActive(el);document.getElementById("main").innerHTML=`<div class="top"><h1>👤 Mon profil</h1></div><div class="panel"><p class="muted">Identité Pi validée par App Studio : <b>@${escapeHtml(u.username)}</b></p><label>Nom d'affichage</label><input value="${escapeHtml(u.name||u.username)}" id="pname"><label>E-mail</label><input value="${escapeHtml(u.email||"")}" id="pemail" type="email"><label>Téléphone</label><input value="${escapeHtml(u.phone||"")}" id="pphone"><button class="primary" onclick="saveProfile()">Enregistrer</button></div>`}
+function saveProfile(){const u=currentUser();u.name=document.getElementById("pname").value.trim()||u.username;u.email=document.getElementById("pemail").value.trim();u.phone=document.getElementById("pphone").value.trim();db.requests.filter(r=>r.uid===session.user.uid).forEach(r=>{r.name=u.name;r.email=u.email;r.phone=u.phone});save();alert("Profil mis à jour.");dashboard()}
+function logout(){clearSession();document.getElementById("app").classList.add("hidden");document.getElementById("headerAccount").classList.add("hidden");document.getElementById("loginScreen").classList.remove("hidden");setAuthStatus("Vous êtes déconnecté. Reconnectez-vous avec Pi Network.");}
+
+window.addEventListener("load",initPi);
+</script>
+</body>
+</html>
